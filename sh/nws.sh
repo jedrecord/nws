@@ -12,14 +12,11 @@ SHOW_TODAY=false
 OUTPUT_FILE="$HOME/.nwscache"
 SED=sed
 
-NEARSHORE_BASE_URL="https://tgftp.nws.noaa.gov/data/forecasts/marine/coastal/am"
-OFFSHORE_BASE_URL="https://tgftp.nws.noaa.gov/data/forecasts/marine/offshore/an"
-nearshore_location="154"
-offshore_location="833"
-nearshore_adjacent="152"
-offshore_adjacent="830"
-target_area="OCRACOKE"
-adjacent_area="OREGON INLET"
+coastal_location="amz154"
+offshore_location="anz833"
+coastal_adjacent="amz152"
+offshore_adjacent="anz830"
+NWS_BASE_URL="https://tgftp.nws.noaa.gov/data/forecasts/marine"
 
 NAME="nws"
 PURPOSE="summarize coastal waters forecasts from the national weather service"
@@ -42,8 +39,8 @@ Option          Meaning
  --license      Print full program license to the screen
  -N [anz code]  ANZ code for an adjacent offshore location
  -n [anz code]  ANZ code for the target offshore location
- -O [amz code]  AMZ code for an adjacent nearshore location
- -o [amz code]  AMZ code for the target nearshore location
+ -O [amz code]  AMZ code for an adjacent coastal location
+ -o [amz code]  AMZ code for the target coastal location
  -s [integer]   Assign maximum safe wave height
  -S             Toggle filter for days with specific wave heights
  -v, --version  Print version info"
@@ -56,10 +53,10 @@ main()
             a) SHOW_ADJACENT=true ;;
             f) FORCE_REFRESH=true ;;
             h) show_help ;;
-            N) nearshore_adjacent=$((OPTARG + 0)); FORCE_REFRESH=true ;;
-            n) nearshore_location=$((OPTARG + 0)); FORCE_REFRESH=true ;;
-            O) offshore_adjacent=$((OPTARG + 0)); FORCE_REFRESH=true ;;
-            o) offshore_location=$((OPTARG + 0)); FORCE_REFRESH=true ;;
+            N) coastal_adjacent="$OPTARG"; FORCE_REFRESH=true ;;
+            n) coastal_location="$OPTARG"; FORCE_REFRESH=true ;;
+            O) offshore_adjacent="$OPTARG"; FORCE_REFRESH=true ;;
+            o) offshore_location="$OPTARG"; FORCE_REFRESH=true ;;
             r) SHOW_ONLY_SAFE=true;MAX_SAFE_HEIGHT=99;SHOW_TODAY=true;FORCE_REFRESH=true;SHOW_ADJACENT=true ;;
             s) MAX_SAFE_HEIGHT=$((OPTARG + 0)); FORCE_REFRESH=true ;;
             S) SHOW_ONLY_SAFE=true ;;
@@ -113,20 +110,6 @@ show_license(){
 	exit 0
 }
 
-get-nearshore-url() {
-    local location_id="$1"
-    local prefix="amz"
-    local suffix=".txt"
-    printf "%s/%s%s%s" $NEARSHORE_BASE_URL $prefix "$location_id" $suffix
-}
-
-get-offshore-url() {
-    local location_id="$1"
-    local prefix="anz"
-    local suffix=".txt"
-    printf "%s/%s%s%s" $OFFSHORE_BASE_URL $prefix "$location_id" $suffix
-}
-
 waves() {
     local period textin first second trend safe_height max
     period="$1"
@@ -149,36 +132,68 @@ waves() {
     fi
 }
 
-check_forecast() {
-local url="$1"
-while read -r line; do
-    seg=$(echo $line | $SED -nE 's/^\.([A-Z ]+).*/\1/p')
-    if [[ -n "$seg" ]] && [[ "$seg" != "$prev" ]] || [[ "$line" =~ ^\$\$$ ]]; then
-        waves "$prev" "$last"
-        section="$seg: $line"
-        prev="$seg"
-    else
-        section="$section $line"
+print-title()
+{
+    local location text
+    location="$1"
+    text="$2"
+    case "$location" in 
+        amz152) text="OREGON INLET COASTAL to 20 nm" ;;
+        amz154) text="OCRACOKE COASTAL to 20 nm" ;;
+        anz833) text="OCRACOKE OFFSHORE to 100 nm" ;;
+        anz830) text="OREGON INLET OFFSHORE to 100 nm" ;;
+    esac    
+    echo "$text" | $SED 's/-$//'
+
+}
+
+make-url()
+{
+    local location_id prefix base_url suffix=".txt"
+    location_id="$(echo "$1" | awk '{print tolower($0)}')"
+    if [[ "$location_id" =~ ^amz ]]; then
+        prefix="coastal/am"
+        base_url="$COASTAL_BASE_URL"
+    elif [[ "$location_id" =~ ^anz ]]; then
+        prefix="offshore/an"
+        base_url="$OFFSHORE_BASE_URL"
     fi
-    last="$section"
-done <<< "$(curl -s "$url")"
+    printf "%s/%s/%s%s" "$NWS_BASE_URL" "$prefix" "$location_id" "$suffix"
+}
+
+check_forecast() {
+    local loc url istitle=false
+    loc="$1"
+    url="$(make-url "$loc")"
+
+    while read -r line; do
+        if [[ "$line" =~ ^A[MN]Z[0-9]+\- ]]; then
+            istitle=true
+        elif [ "$istitle" = true ]; then
+            print-title "$loc" "$line"
+            istitle=false
+        fi
+        seg=$(echo "$line" | $SED -nE 's/^\.([A-Z ]+).*/\1/p')
+        if [[ -n "$seg" ]] && [[ "$seg" != "$prev" ]] || [[ "$line" =~ ^\$\$$ ]]; then
+            waves "$prev" "$last"
+            section="$seg: $line"
+            prev="$seg"
+        else
+            section="$section $line"
+        fi
+        last="$section"
+        if [[ "$line" =~ ^\$\$$ ]]; then echo; fi
+    done <<< "$(curl -s "$url")"
 }
 
 get-data() {
     printf "NWS Offshore Forecast\n\n"
     if [ "$SHOW_ADJACENT" = true ]; then
-        echo "$adjacent_area to 20 NM"
-        check_forecast "$(get-nearshore-url $nearshore_adjacent)"
-        echo
-        echo "$adjacent_area to 100 NM"
-        check_forecast "$(get-offshore-url $offshore_adjacent)"
-        echo
+        check_forecast "$coastal_adjacent"
+        check_forecast "$offshore_adjacent"
     fi
-    echo "$target_area to 20 NM"
-    check_forecast "$(get-nearshore-url $nearshore_location)"
-    echo
-    echo "$target_area to 100 NM"
-    check_forecast "$(get-offshore-url $offshore_location)"
+    check_forecast "$coastal_location"
+    check_forecast "$offshore_location"
 }
 
 forecast() {
