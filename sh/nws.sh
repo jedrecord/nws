@@ -40,18 +40,26 @@ Option          Meaning
  -f             Force refresh from nws data feed
  -h, --help     Show usage and options
  --license      Print full program license to the screen
+ -N [anz code]  ANZ code for an adjacent offshore location
+ -n [anz code]  ANZ code for the target offshore location
+ -O [amz code]  AMZ code for an adjacent nearshore location
+ -o [amz code]  AMZ code for the target nearshore location
  -s [integer]   Assign maximum safe wave height
  -S             Toggle filter for days with specific wave heights
  -v, --version  Print version info"
 
 main()
 {
-    while getopts ":-:afhrSs:v" opt; do
+    while getopts ":-:afhN:n:O:o:rSs:v" opt; do
         case "$opt" in
             -) check_long_opts "${OPTARG}"; shift ;;
             a) SHOW_ADJACENT=true ;;
             f) FORCE_REFRESH=true ;;
             h) show_help ;;
+            N) nearshore_adjacent=$((OPTARG + 0)); FORCE_REFRESH=true ;;
+            n) nearshore_location=$((OPTARG + 0)); FORCE_REFRESH=true ;;
+            O) offshore_adjacent=$((OPTARG + 0)); FORCE_REFRESH=true ;;
+            o) offshore_location=$((OPTARG + 0)); FORCE_REFRESH=true ;;
             r) SHOW_ONLY_SAFE=true;MAX_SAFE_HEIGHT=99;SHOW_TODAY=true;FORCE_REFRESH=true;SHOW_ADJACENT=true ;;
             s) MAX_SAFE_HEIGHT=$((OPTARG + 0)); FORCE_REFRESH=true ;;
             S) SHOW_ONLY_SAFE=true ;;
