@@ -153,10 +153,8 @@ make-url()
     location_id="$(echo "$1" | awk '{print tolower($0)}')"
     if [[ "$location_id" =~ ^amz ]]; then
         prefix="coastal/am"
-        base_url="$COASTAL_BASE_URL"
     elif [[ "$location_id" =~ ^anz ]]; then
         prefix="offshore/an"
-        base_url="$OFFSHORE_BASE_URL"
     fi
     printf "%s/%s/%s%s" "$NWS_BASE_URL" "$prefix" "$location_id" "$suffix"
 }
