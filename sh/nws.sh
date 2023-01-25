@@ -19,9 +19,9 @@ offshore_adjacent="anz830"
 NWS_BASE_URL="https://tgftp.nws.noaa.gov/data/forecasts/marine"
 
 NAME="nws"
-PURPOSE="summarize coastal waters forecasts from the national weather service"
+PURPOSE="Summarize coastal wave height forecasts from the national weather service"
 VERSION="0.9"
-UPDATED="23 Jan 2023"
+UPDATED="25 Jan 2023"
 AUTHOR="Jed Record"
 EMAIL="jed.record@gmail.com"
 WEB="https://github.com/jedrecord/nws"
@@ -33,32 +33,35 @@ There is NO WARRANTY, to the extent permitted by law.
 To see the full license text use the --license option."
 USAGE="Usage: ${NAME} [OPTIONS]
 Option          Meaning
- -a             Show data for adjacent area(s)
+ -A, --all      Show forecast wave heights for all locations
+ -a             Show forecast wave heights for adjacent area(s)
  -f             Force refresh from nws data feed
  -h, --help     Show usage and options
- --license      Print full program license to the screen
+ --license      Print license info to the screen
  -N [anz code]  ANZ code for an adjacent offshore location
  -n [anz code]  ANZ code for the target offshore location
  -O [amz code]  AMZ code for an adjacent coastal location
  -o [amz code]  AMZ code for the target coastal location
+ -r, --raw      Show raw NWS data for target coastal location
  -s [integer]   Assign maximum safe wave height
  -S             Toggle filter for days with specific wave heights
  -v, --version  Print version info"
 
 main()
 {
-    while getopts ":-:afhN:n:O:o:rSs:v" opt; do
+    while getopts ":-:AafhN:n:O:o:rSs:v" opt; do
         case "$opt" in
             -) check_long_opts "${OPTARG}"; shift ;;
+            A) SHOW_ONLY_SAFE=true MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
             a) SHOW_ADJACENT=true ;;
             f) FORCE_REFRESH=true ;;
             h) show_help ;;
-            N) coastal_adjacent="$OPTARG"; FORCE_REFRESH=true ;;
-            n) coastal_location="$OPTARG"; FORCE_REFRESH=true ;;
-            O) offshore_adjacent="$OPTARG"; FORCE_REFRESH=true ;;
-            o) offshore_location="$OPTARG"; FORCE_REFRESH=true ;;
-            r) SHOW_ONLY_SAFE=true;MAX_SAFE_HEIGHT=99;SHOW_TODAY=true;FORCE_REFRESH=true;SHOW_ADJACENT=true ;;
-            s) MAX_SAFE_HEIGHT=$((OPTARG + 0)); FORCE_REFRESH=true ;;
+            N) coastal_adjacent="$OPTARG" FORCE_REFRESH=true ;;
+            n) coastal_location="$OPTARG" FORCE_REFRESH=true ;;
+            O) offshore_adjacent="$OPTARG" FORCE_REFRESH=true ;;
+            o) offshore_location="$OPTARG" FORCE_REFRESH=true ;;
+            r) get-raw-data "$coastal_location"; exit ;;
+            s) MAX_SAFE_HEIGHT=$((OPTARG + 0)) FORCE_REFRESH=true ;;
             S) SHOW_ONLY_SAFE=true ;;
             v) show_version ;;
            \?) show_error "\"-${OPTARG}\" is an invalid option" ;;
@@ -74,7 +77,9 @@ main()
 check_long_opts(){
     local long_option="$1"
     case ${long_option} in
+        all) SHOW_ONLY_SAFE=true MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
         license) show_license ;;
+        raw) get-raw-data "$coastal_location"; exit ;;
         version) show_version ;;
         help) show_help ;;
         *) show_error "\"--${long_option}\" is an invalid option" ;;
@@ -111,7 +116,7 @@ show_license(){
 }
 
 waves() {
-    local period textin first second trend safe_height max
+    local period textin first second trend max
     period="$1"
     textin="$2"
     first="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft),.*/\1/p')"
@@ -119,11 +124,7 @@ waves() {
     second="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft).*/\1/p')"
     max="$(echo -n "$second" | $SED -nE 's/.*to ([0-9]+) ft.*/\1/p')"
 
-    if [[ "$max" -le "$MAX_SAFE_HEIGHT" ]]; then
-        safe_height=1
-    fi
-
-    if [[ $safe_height -eq 1 ]] || [ "$SHOW_ONLY_SAFE" = false ]; then
+    if [[ "$max" -le "$MAX_SAFE_HEIGHT" ]] || [ "$SHOW_ONLY_SAFE" = false ]; then
         if [[ -n "$first" ]]; then
             echo "$period: $first $trend to $second"
         elif [[ -n "$second" ]]; then
@@ -149,7 +150,7 @@ print-title()
 
 make-url()
 {
-    local location_id prefix base_url suffix=".txt"
+    local location_id prefix suffix=".txt"
     location_id="$(echo "$1" | awk '{print tolower($0)}')"
     if [[ "$location_id" =~ ^amz ]]; then
         prefix="coastal/am"
@@ -159,11 +160,14 @@ make-url()
     printf "%s/%s/%s%s" "$NWS_BASE_URL" "$prefix" "$location_id" "$suffix"
 }
 
-check_forecast() {
+get-raw-data()
+{
+    curl -s "$(make-url "$1")"
+}
+
+check-forecast() {
     local loc url istitle=false
     loc="$1"
-    url="$(make-url "$loc")"
-
     while read -r line; do
         if [[ "$line" =~ ^A[MN]Z[0-9]+\- ]]; then
             istitle=true
@@ -181,17 +185,17 @@ check_forecast() {
         fi
         last="$section"
         if [[ "$line" =~ ^\$\$$ ]]; then echo; fi
-    done <<< "$(curl -s "$url")"
+    done <<< "$(get-raw-data "$loc")"
 }
 
 get-data() {
     printf "NWS Offshore Forecast\n\n"
     if [ "$SHOW_ADJACENT" = true ]; then
-        check_forecast "$coastal_adjacent"
-        check_forecast "$offshore_adjacent"
+        check-forecast "$coastal_adjacent"
+        check-forecast "$offshore_adjacent"
     fi
-    check_forecast "$coastal_location"
-    check_forecast "$offshore_location"
+    check-forecast "$coastal_location"
+    check-forecast "$offshore_location"
 }
 
 forecast() {
@@ -209,7 +213,7 @@ forecast() {
     if [ "$SHOW_TODAY" = true ]; then
         cat "$OUTPUT_FILE"
     else
-        cat "$OUTPUT_FILE" | grep -Ev "TO|NIGHT"
+        grep -Ev "TO|NIGHT" "$OUTPUT_FILE"
     fi
 }
 
