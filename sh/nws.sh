@@ -217,7 +217,7 @@ print_output() {
     of="$(make-url "$offshore_location")"
     in="$(make-url "$coastal_location")"
     if [ "$output_html" = true ]; then
-        header="<html><head><title>NWS Coastal/Offshore Forecast</title></head><body bgcolor='#333333' color='#D3D3D3'><pre>"
+        header="<html><head><title>NWS Coastal/Offshore Forecast</title></head><body bgcolor='#333333' text='#D3D3D3'><pre>"
         footer="<a href=\"$in\">$coastal_location</a> - <a href=\"$of\">$offshore_location</a><pre></body></html>"
         echo "$header"
     fi
