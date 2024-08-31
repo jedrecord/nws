@@ -218,7 +218,7 @@ print_output() {
     in="$(make-url "$coastal_location")"
     if [ "$output_html" = true ]; then
         header="<html><head><title>NWS Coastal/Offshore Forecast</title></head><body bgcolor='#333333' text='#D3D3D3'><pre>"
-        footer="<a href=\"$in\">$coastal_location</a> - <a href=\"$of\">$offshore_location</a><pre></body></html>"
+        footer="<a href=\"$in\">raw coastal text</a> - <a href=\"$of\">raw offshore text</a><pre></body></html>"
         echo "$header"
     fi
     if [ "$SHOW_TODAY" = true ]; then
@@ -226,8 +226,10 @@ print_output() {
     else
         grep -Ev "TO|NIGHT" "$OUTPUT_FILE"
     fi
+    echo
     echo "$footer"
 }
+
 forecast() {
     if [[ -f "$OUTPUT_FILE" ]]; then
         local now modtime lastchecked
