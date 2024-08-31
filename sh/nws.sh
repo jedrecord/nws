@@ -36,6 +36,7 @@ Option          Meaning
  -A, --all      Show forecast wave heights for all locations
  -a             Show forecast wave heights for adjacent area(s)
  -f             Force refresh from nws data feed
+ -H, --html      Output in html format
  -h, --help     Show usage and options
  --license      Print license info to the screen
  -N [anz code]  ANZ code for an adjacent offshore location
@@ -45,16 +46,18 @@ Option          Meaning
  -r, --raw      Show raw NWS data for target coastal location
  -s [integer]   Assign maximum safe wave height
  -S             Toggle filter for days with specific wave heights
- -v, --version  Print version info"
+ -v, --version  Print version info
+ -x, --offline  Use local files instead of nws data feed"
 
 main()
 {
-    while getopts ":-:AafhN:n:O:o:rSs:v" opt; do
+    while getopts ":-:AafHhN:n:O:o:rSs:vx" opt; do
         case "$opt" in
             -) check_long_opts "${OPTARG}"; shift ;;
             A) SHOW_ONLY_SAFE=true MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
             a) SHOW_ADJACENT=true ;;
             f) FORCE_REFRESH=true ;;
+            H) output_html=true ;;
             h) show_help ;;
             N) coastal_adjacent="$OPTARG" FORCE_REFRESH=true ;;
             n) coastal_location="$OPTARG" FORCE_REFRESH=true ;;
@@ -64,6 +67,7 @@ main()
             s) MAX_SAFE_HEIGHT=$((OPTARG + 0)) FORCE_REFRESH=true ;;
             S) SHOW_ONLY_SAFE=true ;;
             v) show_version ;;
+            x) is_offline=true FORCE_REFRESH=true ;;
            \?) show_error "\"-${OPTARG}\" is an invalid option" ;;
             :) show_error "The option \"-${OPTARG}\" requires an argumemt." ;;
         esac
@@ -78,7 +82,9 @@ check_long_opts(){
     local long_option="$1"
     case ${long_option} in
         all) SHOW_ONLY_SAFE=true MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
+        html) output_html=true ;;
         license) show_license ;;
+        offline) is_offline=true FORCE_REFRESH=true ;;
         raw) get-raw-data "$coastal_location"; exit ;;
         version) show_version ;;
         help) show_help ;;
@@ -122,6 +128,7 @@ waves() {
     first="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft),.*/\1/p')"
     trend="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft), ([a-z ]+) to.*/\2/p')"
     second="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft).*/\1/p')"
+    around="$(echo -n "$textin" | $SED -nE 's/.*around ([0-9]+) ft.*/\1/p')"
     max="$(echo -n "$second" | $SED -nE 's/.*to ([0-9]+) ft.*/\1/p')"
 
     if [[ "$max" -le "$MAX_SAFE_HEIGHT" ]] || [ "$SHOW_ONLY_SAFE" = false ]; then
@@ -129,6 +136,8 @@ waves() {
             echo "$period: $first $trend to $second"
         elif [[ -n "$second" ]]; then
             echo "$period: $second"
+        elif [[ -n "$around" ]]; then
+            echo "$period: $around ft"
         fi
     fi
 }
@@ -162,7 +171,12 @@ make-url()
 
 get-raw-data()
 {
-    curl -s "$(make-url "$1")"
+    local loc="$1"
+    if [[ "$is_offline" = true ]]; then
+        cat "$loc.txt"
+    else
+        curl -s "$(make-url "$loc")"
+    fi
 }
 
 check-forecast() {
@@ -198,6 +212,22 @@ get-data() {
     check-forecast "$offshore_location"
 }
 
+print_output() {
+    local header footer of in file="$1"
+    of="$(make-url "$offshore_location")"
+    in="$(make-url "$coastal_location")"
+    if [ "$output_html" = true ]; then
+        header="<html><head><title>NWS Coastal/Offshore Forecast</title></head><body bgcolor=black color=LightGray><code>"
+        footer="<a href=\"$in\">$coastal_location</a> - <a href=\"$of\">$offshore_location</a><code></body></html>"
+        echo "$header"
+    fi
+    if [ "$SHOW_TODAY" = true ]; then
+        cat "$OUTPUT_FILE"
+    else
+        grep -Ev "TO|NIGHT" "$OUTPUT_FILE"
+    fi
+    echo "$footer"
+}
 forecast() {
     if [[ -f "$OUTPUT_FILE" ]]; then
         local now modtime lastchecked
@@ -210,11 +240,7 @@ forecast() {
     else
         get-data > "$OUTPUT_FILE"
     fi
-    if [ "$SHOW_TODAY" = true ]; then
-        cat "$OUTPUT_FILE"
-    else
-        grep -Ev "TO|NIGHT" "$OUTPUT_FILE"
-    fi
+    print_output "$OUTPUT_FILE"
 }
 
 main "$@"
