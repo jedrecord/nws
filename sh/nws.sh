@@ -218,7 +218,7 @@ print_output() {
     in="$(make-url "$coastal_location")"
     if [ "$output_html" = true ]; then
         header="<html><head><title>NWS Coastal/Offshore Forecast</title></head><body bgcolor='#333333' text='#D3D3D3'><pre>"
-        footer="<a style='color:white' href=\"$in\">raw coastal text</a> - <a style='color:white' href=\"$of\">raw offshore text</a><pre></body></html>"
+        footer="<a style='color:#D3D3D3' href=\"$in\">raw coastal text</a> - <a style='color:#D3D3D3' href=\"$of\">raw offshore text</a><pre></body></html>"
         echo "$header"
     fi
     if [ "$SHOW_TODAY" = true ]; then
