@@ -4,7 +4,7 @@
 #
 # author - Jed Record <jed.record@gmail.com>
 
-SHOW_ONLY_SAFE=true
+SHOW_ONLY_SAFE=false
 MAX_SAFE_HEIGHT=5
 FORCE_REFRESH=false
 SHOW_ADJACENT=false
@@ -12,6 +12,7 @@ SHOW_TODAY=false
 OUTPUT_FILE="$HOME/.nwscache"
 SED=sed
 
+inshore_location="amz135"
 coastal_location="amz154"
 offshore_location="anz833"
 coastal_adjacent="amz152"
@@ -44,17 +45,18 @@ Option          Meaning
  -O [amz code]  AMZ code for an adjacent coastal location
  -o [amz code]  AMZ code for the target coastal location
  -r, --raw      Show raw NWS data for target coastal location
- -s [integer]   Assign maximum safe wave height
  -S             Toggle filter for days with specific wave heights
+ -s [integer]   Assign maximum safe wave height
+ -t             Include today's forecast and nightly
  -v, --version  Print version info
  -x, --offline  Use local files instead of nws data feed"
 
 main()
 {
-    while getopts ":-:AafHhN:n:O:o:rSs:vx" opt; do
+    while getopts ":-:AafHhN:n:O:o:rSs:tvx" opt; do
         case "$opt" in
             -) check_long_opts "${OPTARG}"; shift ;;
-            A) SHOW_ONLY_SAFE=true MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
+            A) SHOW_ONLY_SAFE=false MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
             a) SHOW_ADJACENT=true ;;
             f) FORCE_REFRESH=true ;;
             H) output_html=true ;;
@@ -64,8 +66,9 @@ main()
             O) offshore_adjacent="$OPTARG" FORCE_REFRESH=true ;;
             o) offshore_location="$OPTARG" FORCE_REFRESH=true ;;
             r) get-raw-data "$coastal_location"; exit ;;
-            s) MAX_SAFE_HEIGHT=$((OPTARG + 0)) FORCE_REFRESH=true ;;
+            t) SHOW_TODAY=true ;;
             S) SHOW_ONLY_SAFE=true ;;
+            s) MAX_SAFE_HEIGHT=$((OPTARG + 0)) FORCE_REFRESH=true ;;
             v) show_version ;;
             x) is_offline=true FORCE_REFRESH=true ;;
            \?) show_error "\"-${OPTARG}\" is an invalid option" ;;
@@ -81,7 +84,7 @@ main()
 check_long_opts(){
     local long_option="$1"
     case ${long_option} in
-        all) SHOW_ONLY_SAFE=true MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
+        all) SHOW_ONLY_SAFE=false MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
         html) output_html=true ;;
         license) show_license ;;
         offline) is_offline=true FORCE_REFRESH=true ;;
@@ -128,7 +131,8 @@ waves() {
     first="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft),.*/\1/p')"
     trend="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft), ([a-z ]+) to.*/\2/p')"
     second="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft).*/\1/p')"
-    around="$(echo -n "$textin" | $SED -nE 's/.*around ([0-9]+) ft.*/\1/p')"
+    around="$(echo -n "$textin" | $SED -nE 's/.*around ([0-9]+ ft).*/\1/p')"
+    orless="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ ft or less).*/\1/p')"
     max="$(echo -n "$second" | $SED -nE 's/.*to ([0-9]+) ft.*/\1/p')"
 
     if [[ "$max" -le "$MAX_SAFE_HEIGHT" ]] || [ "$SHOW_ONLY_SAFE" = false ]; then
@@ -137,7 +141,9 @@ waves() {
         elif [[ -n "$second" ]]; then
             echo "$period: $second"
         elif [[ -n "$around" ]]; then
-            echo "$period: $around ft"
+            echo "$period: $around"
+        elif [[ -n "$orless" ]]; then
+            echo "$period: $orless"
         fi
     fi
 }
@@ -148,6 +154,7 @@ print-title()
     location="$1"
     text="$2"
     case "$location" in 
+        amz135) text="PAMLICO SOUND" ;;
         amz152) text="OREGON INLET COASTAL to 20 nm" ;;
         amz154) text="OCRACOKE COASTAL to 20 nm" ;;
         anz833) text="OCRACOKE OFFSHORE to 100 nm" ;;
@@ -208,6 +215,7 @@ get-data() {
         check-forecast "$coastal_adjacent"
         check-forecast "$offshore_adjacent"
     fi
+    check-forecast "$inshore_location"
     check-forecast "$coastal_location"
     check-forecast "$offshore_location"
 }
@@ -215,10 +223,11 @@ get-data() {
 print_output() {
     local header footer of in file="$1"
     of="$(make-url "$offshore_location")"
-    in="$(make-url "$coastal_location")"
+    co="$(make-url "$coastal_location")"
+    in="$(make-url "$inshore_location")"
     if [ "$output_html" = true ]; then
         header="<html><head><title>NWS Coastal/Offshore Forecast</title></head><body bgcolor='#333333' text='#D3D3D3'><pre>"
-        footer="<a style='color:#D3D3D3' href=\"$in\">raw coastal text</a> - <a style='color:#D3D3D3' href=\"$of\">raw offshore text</a><pre></body></html>"
+        footer="<a style='color:#D3D3D3' href=\"$in\">raw inshore text</a> - <a style='color:#D3D3D3' href=\"$co\">raw coastal text</a> - <a style='color:#D3D3D3' href=\"$of\">raw offshore text</a><pre></body></html>"
         echo "$header"
     fi
     if [ "$SHOW_TODAY" = true ]; then
