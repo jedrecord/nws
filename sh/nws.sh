@@ -226,17 +226,16 @@ print_output() {
     co="$(make-url "$coastal_location")"
     in="$(make-url "$inshore_location")"
     if [ "$output_html" = true ]; then
-        header="<html><head><title>NWS Coastal/Offshore Forecast</title></head><body bgcolor='#333333' text='#D3D3D3'><pre>"
-        footer="<a style='color:#D3D3D3' href=\"$in\">raw inshore text</a> - <a style='color:#D3D3D3' href=\"$co\">raw coastal text</a> - <a style='color:#D3D3D3' href=\"$of\">raw offshore text</a><pre></body></html>"
-        echo "$header"
+        header="<html>\n<head>\n<title>NWS Coastal/Offshore Forecast</title>\n</head>\n<body bgcolor='#333333' text='#D3D3D3'>\n<pre style='font-size:2em'>"
+        footer="\n<a style='color:#D3D3D3' href=\"$in\">raw inshore text</a>\n<a style='color:#D3D3D3' href=\"$co\">raw coastal text</a>\n<a style='color:#D3D3D3' href=\"$of\">raw offshore text</a>\n<pre>\n</body>\n</html>\n"
+        echo -e "$header"
     fi
     if [ "$SHOW_TODAY" = true ]; then
         cat "$OUTPUT_FILE"
     else
         grep -Ev "TO|NIGHT" "$OUTPUT_FILE"
     fi
-    echo
-    echo "$footer"
+    echo -e "$footer"
 }
 
 forecast() {
