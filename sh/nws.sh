@@ -125,25 +125,35 @@ show_license(){
 }
 
 waves() {
-    local period textin first second trend max
+    local result period textin first second trend max wind
+    result=""
     period="$1"
     textin="$2"
-    first="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft),.*/\1/p')"
-    trend="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft), ([a-z ]+) to.*/\2/p')"
-    second="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ to [0-9]+ ft).*/\1/p')"
+# Remove wave detail
+    textin="$(echo -n "$textin" | $SED -E 's/Wave Detail.*//')"
+# Check for trend
+    trend="$(echo -n "$textin" | $SED -nE 's/.* to ([0-9]+ ft, [a-z ]+ to) .* ([0-9]+ ft).*/\1 \2/p')"
+# Check for "around"
     around="$(echo -n "$textin" | $SED -nE 's/.*around ([0-9]+ ft).*/\1/p')"
+# Check for "or less"
     orless="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+ ft or less).*/\1/p')"
-    max="$(echo -n "$second" | $SED -nE 's/.*to ([0-9]+) ft.*/\1/p')"
+# Assume std format
+    max="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+) ft.*/\1/p')"
+    wind="$(echo -n "$textin" | $SED -nE 's/.*([NESW]{1,2}) winds .* ([0-9]+ kt).*/\1 \2/p')"
+    windmax="$(echo -n "$textin" | $SED -nE 's/.* ([0-9]+) kt.*/\1/p')"
 
     if [[ "$max" -le "$MAX_SAFE_HEIGHT" ]] || [ "$SHOW_ONLY_SAFE" = false ]; then
-        if [[ -n "$first" ]]; then
-            echo "$period: $first $trend to $second"
-        elif [[ -n "$second" ]]; then
-            echo "$period: $second"
+        if [[ -n "$trend" ]]; then
+            result="$period: $trend"
         elif [[ -n "$around" ]]; then
-            echo "$period: $around"
+            result="$period: $around"
         elif [[ -n "$orless" ]]; then
-            echo "$period: $orless"
+            result="$period: $orless"
+        elif [[ -n "$max" ]]; then
+            result="$period: $max ft"
+        fi
+        if [[ -n "$result" ]]; then
+            echo "$result $wind"
         fi
     fi
 }
@@ -161,7 +171,6 @@ print-title()
         anz830) text="OREGON INLET OFFSHORE to 100 nm" ;;
     esac    
     echo "$text" | $SED 's/-$//'
-
 }
 
 make-url()
