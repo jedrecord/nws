@@ -4,11 +4,12 @@
 #
 # author - Jed Record <jed.record@gmail.com>
 
+SHOW_ALL=false
 SHOW_ONLY_SAFE=false
 MAX_SAFE_HEIGHT=5
 FORCE_REFRESH=false
 SHOW_ADJACENT=false
-SHOW_TODAY=false
+SHOW_TODAY=true
 OUTPUT_FILE="$HOME/.nwscache"
 SED=sed
 
@@ -56,7 +57,7 @@ main()
     while getopts ":-:AafHhN:n:O:o:rSs:tvx" opt; do
         case "$opt" in
             -) check_long_opts "${OPTARG}"; shift ;;
-            A) SHOW_ONLY_SAFE=false MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
+            A) SHOW_ONLY_SAFE=false MAX_SAFE_HEIGHT=99 SHOW_ALL=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
             a) SHOW_ADJACENT=true ;;
             f) FORCE_REFRESH=true ;;
             H) output_html=true ;;
@@ -84,7 +85,7 @@ main()
 check_long_opts(){
     local long_option="$1"
     case ${long_option} in
-        all) SHOW_ONLY_SAFE=false MAX_SAFE_HEIGHT=99 SHOW_TODAY=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
+        all) SHOW_ONLY_SAFE=false MAX_SAFE_HEIGHT=99 SHOW_ALL=true FORCE_REFRESH=true SHOW_ADJACENT=true ;;
         html) output_html=true ;;
         license) show_license ;;
         offline) is_offline=true FORCE_REFRESH=true ;;
@@ -239,8 +240,10 @@ print_output() {
         footer="\n<a style='color:#D3D3D3' href=\"$in\">raw inshore text</a>\n<a style='color:#D3D3D3' href=\"$co\">raw coastal text</a>\n<a style='color:#D3D3D3' href=\"$of\">raw offshore text</a>\n<pre>\n</body>\n</html>\n"
         echo -e "$header"
     fi
-    if [ "$SHOW_TODAY" = true ]; then
+    if [ "$SHOW_ALL" = true ]; then
         cat "$OUTPUT_FILE"
+    elif [ "$SHOW_TODAY" = true ]; then
+        grep -Ev "NIGHT" "$OUTPUT_FILE"
     else
         grep -Ev "TO|NIGHT" "$OUTPUT_FILE"
     fi
